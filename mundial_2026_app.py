@@ -486,8 +486,8 @@ with tab3:
 
                 styled = (
                     df_grupo.style
-                    .applymap(color_pts, subset=["PTS"])
-                    .applymap(color_pos, subset=["#"])
+                    .map(color_pts, subset=["PTS"])
+                    .map(color_pos, subset=["#"])
                     .set_properties(**{
                         "background-color": "#1e293b",
                         "color": "#f8fafc",
