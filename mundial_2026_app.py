@@ -287,7 +287,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────
 # TABS PRINCIPALES
 # ─────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["📋 Partidos", "🏆 Rivales & Esperanzas", "📊 Tabla de Grupos", "🕸️ Grafo de Correlaciones"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Partidos", "🏆 Rivales & Esperanzas", "📊 Tabla de Grupos", "🕸️ Grafo de Correlaciones", "🏟️ Cuadrangulares"])
 
 
 # ══════════════════════════════════════════════
@@ -508,9 +508,15 @@ with tab3:
 # ══════════════════════════════════════════════
 # TAB 4 — GRAFO DE CORRELACIONES
 # ══════════════════════════════════════════════
+
+# ══════════════════════════════════════════════
+# TAB 4 — GRAFO DE CORRELACIONES
+# ══════════════════════════════════════════════
 with tab4:
     st.markdown('<div class="section-header">🕸️ Red de dependencias estocásticas (Monte Carlo)</div>', unsafe_allow_html=True)
     st.caption("Las aristas representan correlaciones de Pearson entre resultados de partidos. Rojo = correlación positiva · Azul = negativa.")
+
+    mostrar_grafo = st.toggle("Mostrar grafo", value=True)
 
     col_g1, col_g2, col_g3 = st.columns(3)
     with col_g1:
@@ -520,133 +526,348 @@ with tab4:
     with col_g3:
         destacar_equipo = st.checkbox("Destacar equipo seleccionado", value=(equipo_sel != "— Todos —"))
 
-    # Construir matriz de correlación desde PRIDEF3
-    df_mc = df_pri.copy()
-    if fase_grafo != "Todas":
-        df_mc = df_mc[df_mc["Fase"] == fase_grafo]
-
-    if len(df_mc) == 0:
-        st.warning("No hay datos MC para esta fase.")
+    if not mostrar_grafo:
+        st.info("Grafo desactivado. Actívalo con el toggle de arriba.")
     else:
-        df_mc["Winner_Loc"] = (df_mc["Indicador"] == "GanaLocal").astype(int)
+        df_mc = df_pri.copy()
+        if fase_grafo != "Todas":
+            df_mc = df_mc[df_mc["Fase"] == fase_grafo]
 
-        # Si solo hay una simulación, generamos correlaciones por partido/equipo
-        n_sims = df_mc["simulacion"].nunique()
-
-        if n_sims < 2:
-            st.info("Con una sola simulación no se puede calcular correlación de Pearson entre partidos. Mostrando red de partidos del equipo seleccionado.")
-            
-            # Mostrar grafo simple de partidos del torneo
-            G = nx.Graph()
-            partidos_mc = df_mc[["Partido","Local","Visitante","Fase"]].drop_duplicates()
-            
-            for _, row in partidos_mc.iterrows():
-                G.add_node(row["Partido"], local=row["Local"], visitante=row["Visitante"], fase=row["Fase"])
-
-            # Conectar partidos que comparten equipo (trayectoria)
-            for i, r1 in partidos_mc.iterrows():
-                for j, r2 in partidos_mc.iterrows():
-                    if r1["Partido"] >= r2["Partido"]: continue
-                    equipos1 = {r1["Local"], r1["Visitante"]}
-                    equipos2 = {r2["Local"], r2["Visitante"]}
-                    if equipos1 & equipos2:
-                        G.add_edge(r1["Partido"], r2["Partido"])
-
-            fig_g, ax_g = plt.subplots(figsize=(12, 7), facecolor="#0f172a")
-            ax_g.set_facecolor("#0f172a")
-
-            node_colors = []
-            for n in G.nodes():
-                nd = G.nodes[n]
-                if destacar_equipo and equipo_sel != "— Todos —":
-                    if equipo_sel in [nd.get("local",""), nd.get("visitante","")]:
-                        node_colors.append("#2dd4bf")
-                    else:
-                        node_colors.append("#334155")
-                else:
-                    fase_n = nd.get("fase","")
-                    color_map = {"Grupos":"#334155","16vos":"#0f766e","8vos":"#0891b2",
-                                 "4tos":"#7c3aed","semi":"#db2777","3ros":"#d97706","Final":"#dc2626"}
-                    node_colors.append(color_map.get(fase_n, "#334155"))
-
-            pos = nx.spring_layout(G, seed=42, k=2)
-            nx.draw_networkx_edges(G, pos, ax=ax_g, edge_color="#334155", alpha=0.5, width=0.8)
-            nx.draw_networkx_nodes(G, pos, ax=ax_g, node_color=node_colors, node_size=200, alpha=0.9)
-            
-            labels = {n: f"P{n}" for n in G.nodes()}
-            nx.draw_networkx_labels(G, pos, labels=labels, ax=ax_g, font_size=6, font_color="#94a3b8")
-            
-            ax_g.axis("off")
-            plt.tight_layout()
-            st.pyplot(fig_g)
-            plt.close()
-
+        if len(df_mc) == 0:
+            st.warning("No hay datos MC para esta fase.")
         else:
-            pivot = df_mc.pivot_table(index="simulacion", columns="Partido", values="Winner_Loc", aggfunc="first").fillna(0)
-            corr_matrix = pivot.corr()
+            df_mc["Winner_Loc"] = (df_mc["Indicador"] == "GanaLocal").astype(int)
+            n_sims = df_mc["simulacion"].nunique()
 
-            G = nx.Graph()
-            partidos_ids = corr_matrix.columns.tolist()
-            for p in partidos_ids:
-                G.add_node(p)
+            if n_sims < 2:
+                st.info("Con una sola simulación no se puede calcular correlación de Pearson. Mostrando red de trayectorias compartidas.")
+                G = nx.Graph()
+                partidos_mc = df_mc[["Partido","Local","Visitante","Fase"]].drop_duplicates()
+                for _, row in partidos_mc.iterrows():
+                    G.add_node(row["Partido"], local=row["Local"], visitante=row["Visitante"], fase=row["Fase"])
+                for i, r1 in partidos_mc.iterrows():
+                    for j, r2 in partidos_mc.iterrows():
+                        if r1["Partido"] >= r2["Partido"]: continue
+                        if {r1["Local"], r1["Visitante"]} & {r2["Local"], r2["Visitante"]}:
+                            G.add_edge(r1["Partido"], r2["Partido"])
 
-            for i in range(len(partidos_ids)):
-                for j in range(i+1, len(partidos_ids)):
-                    p1, p2 = partidos_ids[i], partidos_ids[j]
-                    val = corr_matrix.loc[p1, p2]
-                    if not pd.isna(val) and abs(val) > umbral:
-                        G.add_edge(p1, p2, weight=val)
+                fig_g, ax_g = plt.subplots(figsize=(12, 7), facecolor="#0f172a")
+                ax_g.set_facecolor("#0f172a")
+                node_colors = []
+                color_fases = {"Grupos":"#334155","16vos":"#0f766e","8vos":"#0891b2",
+                               "4tos":"#7c3aed","semi":"#db2777","3ros":"#d97706","Final":"#dc2626"}
+                for n in G.nodes():
+                    nd = G.nodes[n]
+                    if destacar_equipo and equipo_sel != "— Todos —":
+                        if equipo_sel in [nd.get("local",""), nd.get("visitante","")]:
+                            node_colors.append("#2dd4bf"); continue
+                    node_colors.append(color_fases.get(nd.get("fase",""), "#334155"))
 
-            # Layout
-            pos = nx.spring_layout(G, seed=42, k=1.5)
+                pos = nx.spring_layout(G, seed=42, k=2)
+                nx.draw_networkx_edges(G, pos, ax=ax_g, edge_color="#334155", alpha=0.5, width=0.8)
+                nx.draw_networkx_nodes(G, pos, ax=ax_g, node_color=node_colors, node_size=200, alpha=0.9)
+                nx.draw_networkx_labels(G, pos, {n: f"P{n}" for n in G.nodes()}, ax=ax_g, font_size=6, font_color="#94a3b8")
+                ax_g.axis("off")
+                plt.tight_layout()
+                st.pyplot(fig_g)
+                plt.close()
+            else:
+                pivot = df_mc.pivot_table(index="simulacion", columns="Partido", values="Winner_Loc", aggfunc="first").fillna(0)
+                corr_matrix = pivot.corr()
+                G = nx.Graph()
+                partidos_ids = corr_matrix.columns.tolist()
+                for p in partidos_ids:
+                    G.add_node(p)
+                for i in range(len(partidos_ids)):
+                    for j in range(i+1, len(partidos_ids)):
+                        p1, p2 = partidos_ids[i], partidos_ids[j]
+                        val = corr_matrix.loc[p1, p2]
+                        if not pd.isna(val) and abs(val) > umbral:
+                            G.add_edge(p1, p2, weight=val)
 
-            fig_g, ax_g = plt.subplots(figsize=(12, 7), facecolor="#0f172a")
-            ax_g.set_facecolor("#0f172a")
+                pos = nx.spring_layout(G, seed=42, k=1.5)
+                fig_g, ax_g = plt.subplots(figsize=(12, 7), facecolor="#0f172a")
+                ax_g.set_facecolor("#0f172a")
 
-            # Color nodos por fase
-            fase_map = {}
-            for _, row in df_pri[["Partido","Fase"]].drop_duplicates().iterrows():
-                fase_map[row["Partido"]] = row["Fase"]
+                fase_map = {}
+                for _, row in df_pri[["Partido","Fase"]].drop_duplicates().iterrows():
+                    fase_map[row["Partido"]] = row["Fase"]
 
-            color_fases = {"Grupos":"#334155","16vos":"#0f766e","8vos":"#0891b2",
-                           "4tos":"#7c3aed","semi":"#db2777","3ros":"#d97706","Final":"#dc2626"}
-            node_colors = []
-            for n in G.nodes():
+                color_fases = {"Grupos":"#334155","16vos":"#0f766e","8vos":"#0891b2",
+                               "4tos":"#7c3aed","semi":"#db2777","3ros":"#d97706","Final":"#dc2626"}
+                node_colors = []
+                for n in G.nodes():
+                    if destacar_equipo and equipo_sel != "— Todos —":
+                        row_n = df_pri[df_pri["Partido"]==n]
+                        if len(row_n) > 0 and equipo_sel in [row_n.iloc[0]["Local"], row_n.iloc[0]["Visitante"]]:
+                            node_colors.append("#2dd4bf"); continue
+                    node_colors.append(color_fases.get(fase_map.get(n,""), "#334155"))
+
+                edge_vals = [G[u][v]["weight"] for u,v in G.edges()]
+                norm = Normalize(vmin=-0.4, vmax=0.4)
+                cmap = cm.coolwarm
+                edge_colors = [cmap(norm(v)) for v in edge_vals]
+                widths = [abs(v)*8 for v in edge_vals]
+
+                nx.draw_networkx_edges(G, pos, ax=ax_g, edge_color=edge_colors, width=widths, alpha=0.7)
+                nx.draw_networkx_nodes(G, pos, ax=ax_g, node_color=node_colors, node_size=250, alpha=0.9)
+                nx.draw_networkx_labels(G, pos, {n: f"P{n}" for n in G.nodes()}, ax=ax_g, font_size=6, font_color="#f8fafc")
+
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+                sm.set_array([])
+                plt.colorbar(sm, ax=ax_g, orientation="horizontal", fraction=0.03, pad=0.04,
+                             label="Correlación de Pearson").set_label("Correlación de Pearson", color="#94a3b8")
+                ax_g.axis("off")
+                patches = [mpatches.Patch(color=c, label=f) for f, c in color_fases.items() if f in fase_map.values()]
                 if destacar_equipo and equipo_sel != "— Todos —":
-                    row_n = df_pri[df_pri["Partido"]==n].iloc[0] if len(df_pri[df_pri["Partido"]==n])>0 else None
-                    if row_n is not None and equipo_sel in [row_n["Local"], row_n["Visitante"]]:
-                        node_colors.append("#2dd4bf")
-                        continue
-                node_colors.append(color_fases.get(fase_map.get(n,""), "#334155"))
+                    patches.append(mpatches.Patch(color="#2dd4bf", label=equipo_sel))
+                ax_g.legend(handles=patches, loc="upper left", facecolor="#1e293b", edgecolor="#334155",
+                            labelcolor="#f8fafc", fontsize=8)
+                plt.tight_layout()
+                st.pyplot(fig_g)
+                plt.close()
+                st.markdown(f"**{G.number_of_edges()} conexiones** con |correlación| > {umbral} · **{G.number_of_nodes()} partidos** en el grafo")
 
-            edge_vals = [G[u][v]["weight"] for u,v in G.edges()]
-            norm = Normalize(vmin=-0.4, vmax=0.4)
-            cmap = cm.coolwarm
-            edge_colors = [cmap(norm(v)) for v in edge_vals]
-            widths = [abs(v)*8 for v in edge_vals]
 
-            nx.draw_networkx_edges(G, pos, ax=ax_g, edge_color=edge_colors, width=widths, alpha=0.7)
-            nx.draw_networkx_nodes(G, pos, ax=ax_g, node_color=node_colors, node_size=250, alpha=0.9)
-            nx.draw_networkx_labels(G, pos, {n: f"P{n}" for n in G.nodes()}, ax=ax_g, font_size=6, font_color="#f8fafc")
+# ══════════════════════════════════════════════
+# TAB 5 — CUADRANGULARES (BRACKET)
+# ══════════════════════════════════════════════
+with tab5:
+    st.markdown('<div class="section-header">🏟️ Cuadrangulares — Fase Final</div>', unsafe_allow_html=True)
 
-            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-            sm.set_array([])
-            plt.colorbar(sm, ax=ax_g, orientation="horizontal", fraction=0.03, pad=0.04,
-                         label="Correlación de Pearson").set_label("Correlación de Pearson", color="#94a3b8")
-            ax_g.axis("off")
+    col_b1, col_b2 = st.columns([1, 1])
+    with col_b1:
+        mostrar_colores = st.toggle("Colorear casillas por probabilidad", value=True)
+    with col_b2:
+        mostrar_grafo_b = st.toggle("Mostrar grafo de trayectorias", value=False)
 
-            # Leyenda de fases
-            patches = [mpatches.Patch(color=c, label=f) for f, c in color_fases.items() if f in fase_map.values()]
-            if destacar_equipo and equipo_sel != "— Todos —":
-                patches.append(mpatches.Patch(color="#2dd4bf", label=equipo_sel))
-            ax_g.legend(handles=patches, loc="upper left", facecolor="#1e293b", edgecolor="#334155",
-                        labelcolor="#f8fafc", fontsize=8)
+    # ── Calcular probabilidad de cada equipo de llegar a cada fase ──
+    # Usamos PRIDEF3 (todas las simulaciones disponibles)
+    fases_bracket = ["16vos", "8vos", "4tos", "semi", "Final"]
+    n_sims_b = df_pri["simulacion"].nunique()
 
-            plt.tight_layout()
-            st.pyplot(fig_g)
-            plt.close()
+    def prob_llegar(df_mc_all, equipo, fase):
+        """P(equipo aparece en al menos un partido de esa fase)"""
+        mask_fase = df_mc_all["Fase"] == fase
+        mask_eq   = (df_mc_all["Local"] == equipo) | (df_mc_all["Visitante"] == equipo)
+        sims_llega = df_mc_all[mask_fase & mask_eq]["simulacion"].nunique()
+        total_sims = max(df_mc_all["simulacion"].nunique(), 1)
+        return sims_llega / total_sims
 
-            st.markdown(f"**{G.number_of_edges()} conexiones** con |correlación| > {umbral} · **{G.number_of_nodes()} partidos** en el grafo")
+    def get_prob_color(p, active=True):
+        """Devuelve color de fondo y texto según probabilidad."""
+        if not active:
+            return "#1e293b", "#f8fafc"
+        if p >= 0.80:   return "#064e3b", "#34d399"
+        elif p >= 0.60: return "#0f3460", "#60a5fa"
+        elif p >= 0.40: return "#3b1f6e", "#a78bfa"
+        elif p >= 0.20: return "#451a03", "#fbbf24"
+        elif p > 0.0:   return "#3b0e0e", "#f87171"
+        else:           return "#0f172a", "#475569"
+
+    def indicador_winner(ind, local, visitante):
+        if "Local" in ind or ind == "GanaLocal":
+            return local
+        return visitante
+
+    # Construir árbol de partidos desde RESDEF3
+    ko = df_res[df_res["Fase"] != "Grupos"].copy()
+    ko_dict = {}
+    for _, r in ko.iterrows():
+        pid = int(r["Partido"])
+        ko_dict[pid] = {
+            "local": r["Local"], "goles_l": int(r["Goles_L"]),
+            "visitante": r["Visitante"], "goles_v": int(r["Goles_V"]),
+            "ind": r["Indicador"], "fase": r["Fase"],
+            "winner": indicador_winner(r["Indicador"], r["Local"], r["Visitante"])
+        }
+
+    # ── Estructura del bracket (left side / right side) ──
+    # Lado izquierdo: P73→P90, P74→P89, P75→P90, P77→P89 ...
+    # Definimos los 4 cuadrantes con sus 16vos, 8vo, 4to, semi
+    bracket_structure = {
+        "left": [
+            {"label": "Cuadrante A", "16vos": [74, 77], "8vos": 89, "4tos": 97, "semi": 101},
+            {"label": "Cuadrante B", "16vos": [73, 75], "8vos": 90, "4tos": 97, "semi": 101},
+            {"label": "Cuadrante C", "16vos": [83, 84], "8vos": 91, "4tos": 98, "semi": 101},
+            {"label": "Cuadrante D", "16vos": [81, 82], "8vos": 92, "4tos": 98, "semi": 101},
+        ],
+        "right": [
+            {"label": "Cuadrante E", "16vos": [76, 78], "8vos": 93, "4tos": 99, "semi": 102},
+            {"label": "Cuadrante F", "16vos": [80, 79], "8vos": 94, "4tos": 99, "semi": 102},
+            {"label": "Cuadrante G", "16vos": [86, 88], "8vos": 95, "4tos": 100, "semi": 102},
+            {"label": "Cuadrante H", "16vos": [85, 87], "8vos": 96, "4tos": 100, "semi": 102},
+        ]
+    }
+
+    def render_match_card(pid, fase_label, use_color, width="100%"):
+        if pid not in ko_dict:
+            return f'<div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:8px;margin:3px 0;min-height:72px;opacity:0.4;"><span style="color:#475569;font-size:11px;">Por definir</span></div>'
+        m = ko_dict[pid]
+        loc, vis = m["local"], m["visitante"]
+        gl, gv = m["goles_l"], m["goles_v"]
+        ind = m["ind"]
+
+        # Colores ganador/perdedor
+        if "Local" in ind or ind == "GanaLocal":
+            cl, cv = "#34d399", "#64748b"
+        else:
+            cl, cv = "#64748b", "#34d399"
+
+        # Probabilidad de llegar
+        p_loc = prob_llegar(df_pri, loc, fase_label)
+        p_vis = prob_llegar(df_pri, vis, fase_label)
+        bg_loc, tx_loc = get_prob_color(p_loc, use_color)
+        bg_vis, tx_vis = get_prob_color(p_vis, use_color)
+
+        penales = "🥅" if "Penales" in ind else ""
+
+        return f"""
+        <div style="border:1px solid #334155;border-radius:8px;overflow:hidden;margin:3px 0;font-size:12px;">
+            <div style="background:{bg_loc};padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:{tx_loc};font-weight:600;">{loc[:16]}</span>
+                <span style="color:{cl};font-weight:700;font-size:14px;">{gl} {penales}</span>
+            </div>
+            <div style="background:{bg_vis};padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:{tx_vis};font-weight:600;">{vis[:16]}</span>
+                <span style="color:{cv};font-weight:700;font-size:14px;">{gv}</span>
+            </div>
+            <div style="background:#0f172a;padding:2px 8px;font-size:10px;color:#475569;">P{pid} · {m["fase"]}</div>
+        </div>"""
+
+    # ── Leyenda de colores ──
+    if mostrar_colores:
+        st.markdown("""
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <span style="background:#064e3b;color:#34d399;padding:3px 10px;border-radius:999px;font-size:11px;">≥80% prob.</span>
+            <span style="background:#0f3460;color:#60a5fa;padding:3px 10px;border-radius:999px;font-size:11px;">60–80%</span>
+            <span style="background:#3b1f6e;color:#a78bfa;padding:3px 10px;border-radius:999px;font-size:11px;">40–60%</span>
+            <span style="background:#451a03;color:#fbbf24;padding:3px 10px;border-radius:999px;font-size:11px;">20–40%</span>
+            <span style="background:#3b0e0e;color:#f87171;padding:3px 10px;border-radius:999px;font-size:11px;">&lt;20%</span>
+            <span style="background:#0f172a;color:#475569;padding:3px 10px;border-radius:999px;font-size:11px;border:1px solid #334155;">No llegó</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Render bracket ──
+    # 16vos (8 por lado) | 8vos (4) | 4tos (2) | semi (1) | FINAL | semi | 4tos | 8vos | 16vos
+    col_left, col_center, col_right = st.columns([5, 2, 5])
+
+    with col_left:
+        st.markdown("**← Cuadrantes A·B·C·D**", unsafe_allow_html=False)
+        for cuad in bracket_structure["left"]:
+            st.markdown(f'<div style="font-size:11px;color:#0f766e;font-weight:700;margin:6px 0 2px 0;">▶ {cuad["label"]}</div>', unsafe_allow_html=True)
+            sub_cols = st.columns([3, 3, 3, 3])
+            # 16vos — 2 partidos
+            with sub_cols[0]:
+                for pid in cuad["16vos"]:
+                    st.markdown(render_match_card(pid, "16vos", mostrar_colores), unsafe_allow_html=True)
+            # 8vos
+            with sub_cols[1]:
+                st.markdown("<div style='margin-top:36px'>", unsafe_allow_html=True)
+                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores), unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            # 4tos — solo si es el primer cuadrante del par
+            with sub_cols[2]:
+                if cuad["label"] in ["Cuadrante A", "Cuadrante C"]:
+                    st.markdown("<div style='margin-top:72px'>", unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            # Semi — solo en cuadrante A
+            with sub_cols[3]:
+                if cuad["label"] == "Cuadrante A":
+                    st.markdown("<div style='margin-top:144px'>", unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+    with col_center:
+        # Final + 3er puesto
+        st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
+        st.markdown('<div style="text-align:center;color:#fbbf24;font-weight:700;font-size:13px;margin-bottom:6px;">🥇 FINAL</div>', unsafe_allow_html=True)
+        st.markdown(render_match_card(104, "Final", mostrar_colores), unsafe_allow_html=True)
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        st.markdown('<div style="text-align:center;color:#94a3b8;font-weight:700;font-size:12px;margin-bottom:6px;">🥉 3er Puesto</div>', unsafe_allow_html=True)
+        st.markdown(render_match_card(103, "3ros", mostrar_colores), unsafe_allow_html=True)
+
+    with col_right:
+        st.markdown("**Cuadrantes E·F·G·H →**", unsafe_allow_html=False)
+        for cuad in bracket_structure["right"]:
+            st.markdown(f'<div style="font-size:11px;color:#0f766e;font-weight:700;margin:6px 0 2px 0;">◀ {cuad["label"]}</div>', unsafe_allow_html=True)
+            sub_cols = st.columns([3, 3, 3, 3])
+            with sub_cols[3]:
+                for pid in cuad["16vos"]:
+                    st.markdown(render_match_card(pid, "16vos", mostrar_colores), unsafe_allow_html=True)
+            with sub_cols[2]:
+                st.markdown("<div style='margin-top:36px'>", unsafe_allow_html=True)
+                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores), unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with sub_cols[1]:
+                if cuad["label"] in ["Cuadrante E", "Cuadrante G"]:
+                    st.markdown("<div style='margin-top:72px'>", unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            with sub_cols[0]:
+                if cuad["label"] == "Cuadrante E":
+                    st.markdown("<div style='margin-top:144px'>", unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Grafo de trayectorias del bracket ──
+    if mostrar_grafo_b:
+        st.divider()
+        st.markdown('<div class="section-header">🕸️ Grafo de trayectorias — Fase Final</div>', unsafe_allow_html=True)
+
+        G_b = nx.DiGraph()
+        for pid, m in ko_dict.items():
+            G_b.add_node(pid, label=f"P{pid}\n{m['winner'][:8]}", fase=m["fase"],
+                         winner=m["winner"])
+
+        # Conectar: ganador de X avanza a Y
+        avance = {
+            73: 90, 74: 89, 75: 90, 76: 93, 77: 89, 78: 93,
+            79: 94, 80: 94, 81: 92, 82: 92, 83: 91, 84: 91,
+            85: 96, 86: 95, 87: 96, 88: 95,
+            89: 97, 90: 97, 91: 98, 92: 98,
+            93: 99, 94: 99, 95: 100, 96: 100,
+            97: 101, 98: 101, 99: 102, 100: 102,
+            101: 104, 102: 104,
+        }
+        for src, dst in avance.items():
+            if src in G_b and dst in G_b:
+                G_b.add_edge(src, dst)
+
+        color_fases_b = {"16vos": "#0f766e", "8vos": "#0891b2",
+                         "4tos": "#7c3aed", "semi": "#db2777",
+                         "3ros": "#d97706", "Final": "#dc2626"}
+
+        # Highlight equipo seleccionado
+        def node_color_b(pid):
+            m = ko_dict.get(pid, {})
+            if equipo_sel != "— Todos —" and equipo_sel in [m.get("local",""), m.get("visitante",""), m.get("winner","")]:
+                return "#2dd4bf"
+            return color_fases_b.get(m.get("fase",""), "#334155")
+
+        node_colors_b = [node_color_b(n) for n in G_b.nodes()]
+        labels_b = {n: G_b.nodes[n].get("label", f"P{n}") for n in G_b.nodes()}
+
+        pos_b = nx.spring_layout(G_b, seed=7, k=2.5)
+        fig_b, ax_b = plt.subplots(figsize=(13, 6), facecolor="#0f172a")
+        ax_b.set_facecolor("#0f172a")
+        nx.draw_networkx_edges(G_b, pos_b, ax=ax_b, edge_color="#475569",
+                               arrows=True, arrowsize=15, width=1.5, alpha=0.8,
+                               connectionstyle="arc3,rad=0.1")
+        nx.draw_networkx_nodes(G_b, pos_b, ax=ax_b, node_color=node_colors_b,
+                               node_size=400, alpha=0.95)
+        nx.draw_networkx_labels(G_b, pos_b, labels_b, ax=ax_b,
+                                font_size=5.5, font_color="#f8fafc")
+        patches_b = [mpatches.Patch(color=c, label=f) for f, c in color_fases_b.items()]
+        if equipo_sel != "— Todos —":
+            patches_b.append(mpatches.Patch(color="#2dd4bf", label=equipo_sel))
+        ax_b.legend(handles=patches_b, loc="upper left", facecolor="#1e293b",
+                    edgecolor="#334155", labelcolor="#f8fafc", fontsize=8)
+        ax_b.axis("off")
+        plt.tight_layout()
+        st.pyplot(fig_b)
+        plt.close()
 
 
 # ─────────────────────────────────────────────
