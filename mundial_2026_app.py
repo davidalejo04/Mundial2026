@@ -774,7 +774,7 @@ with tab5:
         st.markdown(render_match_card(103, "3ros", mostrar_colores), unsafe_allow_html=True)
 
     with col_right:
-        st.markdown("**Cuadrantes E·F·G·H →**", unsafe_allow_False)
+        st.markdown("**Cuadrantes E·F·G·H →**")
         for cuad in bracket_structure["right"]:
             st.markdown(f'<div style="font-size:11px;color:#0f766e;font-weight:700;margin:6px 0 2px 0;">◀ {cuad["label"]}</div>', unsafe_allow_html=True)
             sub_cols = st.columns([3, 3, 3, 3])
