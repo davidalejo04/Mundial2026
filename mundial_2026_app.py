@@ -449,34 +449,60 @@ with tab3:
         for ci, letra in enumerate(fila):
             equipos = [{"team": t, **v} for t, v in standings.items() if v["grupo"] == letra]
             equipos.sort(key=lambda x: (x["pts"], x["gf"] - x["gc"], x["gf"]), reverse=True)
-            
-            tabla_html = f"""
-            <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0;overflow:hidden;margin-bottom:12px;">
-                <div style="background:#0f766e;padding:10px 14px;font-weight:700;color:#f8fafc;font-size:14px;">GRUPO {letra}</div>
-                <div style="padding:8px 14px;">
-                    <div style="display:grid;grid-template-columns:20px 1fr 30px 30px 36px;gap:4px;font-size:11px;color:#64748b;padding:4px 0;border-bottom:1px solid #334155;">
-                        <span>#</span><span>Equipo</span><span style="text-align:center">GF</span><span style="text-align:center">DG</span><span style="text-align:center;color:#2dd4bf">PTS</span>
-                    </div>
-            """
-            for i, eq in enumerate(equipos):
-                dg = eq["gf"] - eq["gc"]
-                dg_str = f"+{dg}" if dg > 0 else str(dg)
-                pos_colors = ["#34d399","#34d399","#fbbf24","#f87171"]
-                pos_color = pos_colors[min(i, 3)]
-                hl = "background:#0f172a;" if i % 2 == 0 else ""
-                bold = "font-weight:700;" if equipo_sel != "— Todos —" and eq["team"] == equipo_sel else ""
-                tabla_html += f"""
-                    <div style="display:grid;grid-template-columns:20px 1fr 30px 30px 36px;gap:4px;padding:6px 0;{hl}">
-                        <span style="color:{pos_color};font-weight:700;font-size:12px;">{i+1}</span>
-                        <span style="color:#f8fafc;font-size:12px;{bold}">{eq["team"][:14]}</span>
-                        <span style="text-align:center;color:#94a3b8;font-size:12px">{eq["gf"]}</span>
-                        <span style="text-align:center;color:#94a3b8;font-size:12px">{dg_str}</span>
-                        <span style="text-align:center;color:#2dd4bf;font-weight:700;font-size:13px">{eq["pts"]}</span>
-                    </div>
-                """
-            tabla_html += "</div></div>"
+
             with cols[ci]:
-                st.markdown(tabla_html, unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='background:#0f766e;padding:8px 12px;border-radius:8px 8px 0 0;"
+                    f"font-weight:700;color:#f8fafc;font-size:14px;margin-bottom:0;'>"
+                    f"GRUPO {letra}</div>",
+                    unsafe_allow_html=True
+                )
+
+                # Construir DataFrame para st.dataframe
+                rows_df = []
+                for i, eq in enumerate(equipos):
+                    dg = eq["gf"] - eq["gc"]
+                    pos_icons = ["🟢", "🟢", "🟡", "🔴"]
+                    icon = pos_icons[min(i, 3)]
+                    nombre = ("★ " if equipo_sel != "— Todos —" and eq["team"] == equipo_sel else "") + eq["team"]
+                    rows_df.append({
+                        "#": f"{icon} {i+1}",
+                        "Selección": nombre,
+                        "PJ": eq["pj"],
+                        "GF": eq["gf"],
+                        "DG": f"+{dg}" if dg > 0 else str(dg),
+                        "PTS": eq["pts"],
+                    })
+
+                df_grupo = pd.DataFrame(rows_df)
+
+                def color_pts(val):
+                    return "color: #2dd4bf; font-weight: bold"
+
+                def color_pos(val):
+                    if "🟢" in str(val): return "color: #34d399; font-weight: bold"
+                    if "🟡" in str(val): return "color: #fbbf24; font-weight: bold"
+                    return "color: #f87171; font-weight: bold"
+
+                styled = (
+                    df_grupo.style
+                    .applymap(color_pts, subset=["PTS"])
+                    .applymap(color_pos, subset=["#"])
+                    .set_properties(**{
+                        "background-color": "#1e293b",
+                        "color": "#f8fafc",
+                        "border": "1px solid #334155",
+                        "font-size": "12px",
+                    })
+                    .set_table_styles([{
+                        "selector": "thead th",
+                        "props": [("background-color", "#0f172a"), ("color", "#94a3b8"),
+                                  ("font-size", "11px"), ("border", "1px solid #334155")]
+                    }])
+                    .hide(axis="index")
+                )
+
+                st.dataframe(styled, use_container_width=True, height=185)
 
 
 # ══════════════════════════════════════════════
