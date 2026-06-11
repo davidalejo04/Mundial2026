@@ -708,22 +708,45 @@ with tab5:
         gl, gv = m["goles_l"], m["goles_v"]
         ind = m["ind"]
 
-        # Colores ganador/perdedor
+        # Colores ganador/perdedor (marcador)
         if "Local" in ind or ind == "GanaLocal":
             cl, cv = "#34d399", "#64748b"
         else:
             cl, cv = "#64748b", "#34d399"
 
-        # Probabilidad de llegar
-        p_loc = prob_llegar(df_pri, loc, fase_label)
-        p_vis = prob_llegar(df_pri, vis, fase_label)
-        bg_loc, tx_loc = get_prob_color(p_loc, use_color)
-        bg_vis, tx_vis = get_prob_color(p_vis, use_color)
-
         penales = "🥅" if "Penales" in ind else ""
 
+        # ── Lógica de color de fondo ──
+        # Si hay equipo seleccionado Y colores activos:
+        #   toda la casilla se colorea según P(equipo llega a esa fase)
+        # Si no hay equipo seleccionado Y colores activos:
+        #   cada fila se colorea según P(ese equipo llega a esa fase)
+        # Si colores desactivados: fondo neutro para ambos
+
+        equipo_activo = equipo_sel != "— Todos —"
+
+        if use_color and equipo_activo:
+            p_card = prob_llegar(df_pri, equipo_sel, fase_label)
+            bg_card, tx_card = get_prob_color(p_card, True)
+            bg_loc = bg_vis = bg_card
+            # texto del equipo seleccionado resaltado, el otro apagado
+            tx_loc = tx_card if loc == equipo_sel else "#94a3b8"
+            tx_vis = tx_card if vis == equipo_sel else "#94a3b8"
+            # borde especial si el equipo aparece en esta casilla
+            border_color = tx_card if equipo_sel in [loc, vis] else "#334155"
+        elif use_color and not equipo_activo:
+            p_loc = prob_llegar(df_pri, loc, fase_label)
+            p_vis = prob_llegar(df_pri, vis, fase_label)
+            bg_loc, tx_loc = get_prob_color(p_loc, True)
+            bg_vis, tx_vis = get_prob_color(p_vis, True)
+            border_color = "#334155"
+        else:
+            bg_loc = bg_vis = "#1e293b"
+            tx_loc = tx_vis = "#f8fafc"
+            border_color = "#334155"
+
         return f"""
-        <div style="border:1px solid #334155;border-radius:8px;overflow:hidden;margin:3px 0;font-size:12px;">
+        <div style="border:1px solid {border_color};border-radius:8px;overflow:hidden;margin:3px 0;font-size:12px;">
             <div style="background:{bg_loc};padding:5px 8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:{tx_loc};font-weight:600;">{loc[:16]}</span>
                 <span style="color:{cl};font-weight:700;font-size:14px;">{gl} {penales}</span>
@@ -737,14 +760,23 @@ with tab5:
 
     # ── Leyenda de colores ──
     if mostrar_colores:
-        st.markdown("""
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-            <span style="background:#064e3b;color:#34d399;padding:3px 10px;border-radius:999px;font-size:11px;">≥80% prob.</span>
-            <span style="background:#0f3460;color:#60a5fa;padding:3px 10px;border-radius:999px;font-size:11px;">60–80%</span>
-            <span style="background:#3b1f6e;color:#a78bfa;padding:3px 10px;border-radius:999px;font-size:11px;">40–60%</span>
-            <span style="background:#451a03;color:#fbbf24;padding:3px 10px;border-radius:999px;font-size:11px;">20–40%</span>
-            <span style="background:#3b0e0e;color:#f87171;padding:3px 10px;border-radius:999px;font-size:11px;">&lt;20%</span>
-            <span style="background:#0f172a;color:#475569;padding:3px 10px;border-radius:999px;font-size:11px;border:1px solid #334155;">No llegó</span>
+        equipo_activo_leg = equipo_sel != "— Todos —"
+        leyenda_titulo = (
+            f"Probabilidad de <b>{equipo_sel}</b> de llegar a cada fase:"
+            if equipo_activo_leg
+            else "Probabilidad de cada equipo de llegar a esa fase:"
+        )
+        st.markdown(f"""
+        <div style="margin-bottom:10px;">
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">{leyenda_titulo}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span style="background:#064e3b;color:#34d399;padding:3px 10px;border-radius:999px;font-size:11px;">≥80%</span>
+                <span style="background:#0f3460;color:#60a5fa;padding:3px 10px;border-radius:999px;font-size:11px;">60–80%</span>
+                <span style="background:#3b1f6e;color:#a78bfa;padding:3px 10px;border-radius:999px;font-size:11px;">40–60%</span>
+                <span style="background:#451a03;color:#fbbf24;padding:3px 10px;border-radius:999px;font-size:11px;">20–40%</span>
+                <span style="background:#3b0e0e;color:#f87171;padding:3px 10px;border-radius:999px;font-size:11px;">&lt;20%</span>
+                <span style="background:#0f172a;color:#475569;padding:3px 10px;border-radius:999px;font-size:11px;border:1px solid #334155;">No llegó / 0%</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -760,33 +792,33 @@ with tab5:
             # 16vos — 2 partidos
             with sub_cols[0]:
                 for pid in cuad["16vos"]:
-                    st.markdown(render_match_card(pid, "16vos", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown(render_match_card(pid, "16vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
             # 8vos
             with sub_cols[1]:
                 st.markdown("<div style='margin-top:36px'>", unsafe_allow_html=True)
-                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores), unsafe_allow_html=True)
+                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
             # 4tos — solo si es el primer cuadrante del par
             with sub_cols[2]:
                 if cuad["label"] in ["Cuadrante A", "Cuadrante C"]:
                     st.markdown("<div style='margin-top:72px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
             # Semi — solo en cuadrante A
             with sub_cols[3]:
                 if cuad["label"] == "Cuadrante A":
                     st.markdown("<div style='margin-top:144px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
 
     with col_center:
         # Final + 3er puesto
         st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;color:#fbbf24;font-weight:700;font-size:13px;margin-bottom:6px;">🥇 FINAL</div>', unsafe_allow_html=True)
-        st.markdown(render_match_card(104, "Final", mostrar_colores), unsafe_allow_html=True)
+        st.markdown(render_match_card(104, "Final", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
         st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;color:#94a3b8;font-weight:700;font-size:12px;margin-bottom:6px;">🥉 3er Puesto</div>', unsafe_allow_html=True)
-        st.markdown(render_match_card(103, "3ros", mostrar_colores), unsafe_allow_html=True)
+        st.markdown(render_match_card(103, "3ros", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
 
     with col_right:
         st.markdown("**Cuadrantes E·F·G·H →**", unsafe_allow_html=False)
@@ -795,20 +827,20 @@ with tab5:
             sub_cols = st.columns([3, 3, 3, 3])
             with sub_cols[3]:
                 for pid in cuad["16vos"]:
-                    st.markdown(render_match_card(pid, "16vos", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown(render_match_card(pid, "16vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
             with sub_cols[2]:
                 st.markdown("<div style='margin-top:36px'>", unsafe_allow_html=True)
-                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores), unsafe_allow_html=True)
+                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
             with sub_cols[1]:
                 if cuad["label"] in ["Cuadrante E", "Cuadrante G"]:
                     st.markdown("<div style='margin-top:72px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
             with sub_cols[0]:
                 if cuad["label"] == "Cuadrante E":
                     st.markdown("<div style='margin-top:144px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Grafo de trayectorias del bracket ──
