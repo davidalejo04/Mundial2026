@@ -653,8 +653,8 @@ with tab5:
         ko_dict[pid] = {
             "local": r["Local"], "goles_l": int(r["Goles_L"]),
             "visitante": r["Visitante"], "goles_v": int(r["Goles_V"]),
-            "ind": r["Ind"], "fase": r["Fase"],
-            "winner": indicador_winner(r["Ind"], r["Local"], r["Visitante"])
+            "ind": r["Indicador"], "fase": r["Fase"],  # <--- Cambiado aquí
+            "winner": indicador_winner(r["Indicador"], r["Local"], r["Visitante"])  # <--- Cambiado aquí
         }
 
     bracket_structure = {
