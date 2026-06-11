@@ -743,7 +743,7 @@ with tab5:
     col_left, col_center, col_right = st.columns([5, 2, 5])
 
     with col_left:
-        st.markdown("**← Cuadrantes A·B·C·D**", unsafe_allow_False)
+        st.markdown("**← Cuadrantes A·B·C·D**")
         for cuad in bracket_structure["left"]:
             st.markdown(f'<div style="font-size:11px;color:#0f766e;font-weight:700;margin:6px 0 2px 0;">▶ {cuad["label"]}</div>', unsafe_allow_html=True)
             sub_cols = st.columns([3, 3, 3, 3])
