@@ -107,7 +107,6 @@ st.markdown("""
 # ─────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    # Rutas — ajusta según donde estén los archivos en producción / Fabric
     base = os.path.dirname(os.path.abspath(__file__))
     
     res_path    = os.path.join(base, "RESDEF3.xlsx")
@@ -133,7 +132,6 @@ def load_data():
     df_pri["Visitante"] = df_pri["Visitante"].str.strip()
     df_pri["Indicador"] = df_pri["Indicador"].str.strip()
 
-    # Mapa equipo → grupo
     team_group = {}
     if "Selección" in df_est_sel.columns and "Grupo" in df_est_sel.columns:
         team_group = dict(zip(df_est_sel["Selección"].str.strip(), df_est_sel["Grupo"].str.strip()))
@@ -148,7 +146,6 @@ df_res, df_pri, df_est, team_group = load_data()
 FASES_ORDEN = ["Grupos", "16vos", "8vos", "4tos", "semi", "3ros", "Final"]
 
 def indicador_to_badge(ind, equipo, local, visitante):
-    """Retorna HTML badge con el resultado del equipo seleccionado."""
     if ind == "GanaLocal":
         return '<span class="badge-win">Victoria</span>' if equipo == local else '<span class="badge-lose">Derrota</span>'
     elif ind == "GanaVisitante":
@@ -169,10 +166,6 @@ def partidos_del_equipo(df, equipo):
     return df[mask].copy()
 
 def calc_esperanza(df_mc, equipo, rival=None, fase=None):
-    """
-    Calcula la esperanza de triunfo del equipo usando todas las simulaciones MC.
-    Si rival se especifica, filtra solo partidos contra ese rival.
-    """
     mask = (df_mc["Local"] == equipo) | (df_mc["Visitante"] == equipo)
     if rival:
         mask &= (df_mc["Local"] == rival) | (df_mc["Visitante"] == rival)
@@ -338,13 +331,11 @@ with tab2:
                 rival = m["Visitante"] if m["Local"] == equipo_sel else m["Local"]
                 es_local = m["Local"] == equipo_sel
 
-                # Calcular esperanza contra este rival en esta fase
                 pw, pd_, pl = calc_esperanza(df_pri, equipo_sel, rival=rival, fase=m["Fase"])
                 
                 goles_eq   = int(m["Goles_L"]) if es_local else int(m["Goles_V"])
                 goles_rival= int(m["Goles_V"]) if es_local else int(m["Goles_L"])
 
-                # Determinar resultado del equipo
                 if m["Indicador"] == "Empate":
                     res_label = "Empate"; res_color = "#fbbf24"
                 elif (m["Indicador"] == "GanaLocal" and es_local) or (m["Indicador"] == "GanaVisitante" and not es_local):
@@ -353,9 +344,6 @@ with tab2:
                     res_label = "Derrota"; res_color = "#f87171"
 
                 cond_str = f"{'Local' if es_local else 'Visitante'} · {m['Fase']} · P{int(m['Partido'])}"
-                
-                # Barra de probabilidad
-                pw_pct = f"{pw:.0%}" if pw is not None else "N/A"
                 bar_w   = int((pw or 0) * 100)
 
                 st.markdown(f"""
@@ -392,7 +380,6 @@ with tab2:
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Estadísticas consolidadas del equipo
         st.markdown(f'<div class="section-header">📈 Resumen estadístico — {equipo_sel}</div>', unsafe_allow_html=True)
         pw_t, pd_t, pl_t = calc_esperanza(df_pri, equipo_sel, fase=fase_filtro)
         if pw_t is not None:
@@ -415,7 +402,6 @@ with tab2:
 with tab3:
     st.markdown('<div class="section-header">🏅 Tablas de posiciones — Fase de Grupos</div>', unsafe_allow_html=True)
 
-    # Calcular standings
     standings = {}
     for team, grupo in team_group.items():
         standings[team] = {"grupo": grupo, "pj": 0, "gf": 0, "gc": 0, "pts": 0}
@@ -435,7 +421,6 @@ with tab3:
 
     grupos_letras = sorted(set(v["grupo"] for v in standings.values()))
     
-    # Filtro de grupo
     col_fg1, col_fg2 = st.columns([1, 3])
     with col_fg1:
         grupo_filtro = st.selectbox("Filtrar grupo", ["Todos"] + grupos_letras)
@@ -458,7 +443,6 @@ with tab3:
                     unsafe_allow_html=True
                 )
 
-                # Construir DataFrame para st.dataframe
                 rows_df = []
                 for i, eq in enumerate(equipos):
                     dg = eq["gf"] - eq["gc"]
@@ -504,10 +488,6 @@ with tab3:
 
                 st.dataframe(styled, use_container_width=True, height=185)
 
-
-# ══════════════════════════════════════════════
-# TAB 4 — GRAFO DE CORRELACIONES
-# ══════════════════════════════════════════════
 
 # ══════════════════════════════════════════════
 # TAB 4 — GRAFO DE CORRELACIONES
@@ -641,13 +621,10 @@ with tab5:
     with col_b2:
         mostrar_grafo_b = st.toggle("Mostrar grafo de trayectorias", value=False)
 
-    # ── Calcular probabilidad de cada equipo de llegar a cada fase ──
-    # Usamos PRIDEF3 (todas las simulaciones disponibles)
     fases_bracket = ["16vos", "8vos", "4tos", "semi", "Final"]
     n_sims_b = df_pri["simulacion"].nunique()
 
     def prob_llegar(df_mc_all, equipo, fase):
-        """P(equipo aparece en al menos un partido de esa fase)"""
         mask_fase = df_mc_all["Fase"] == fase
         mask_eq   = (df_mc_all["Local"] == equipo) | (df_mc_all["Visitante"] == equipo)
         sims_llega = df_mc_all[mask_fase & mask_eq]["simulacion"].nunique()
@@ -655,7 +632,6 @@ with tab5:
         return sims_llega / total_sims
 
     def get_prob_color(p, active=True):
-        """Devuelve color de fondo y texto según probabilidad."""
         if not active:
             return "#1e293b", "#f8fafc"
         if p >= 0.80:   return "#064e3b", "#34d399"
@@ -670,7 +646,6 @@ with tab5:
             return local
         return visitante
 
-    # Construir árbol de partidos desde RESDEF3
     ko = df_res[df_res["Fase"] != "Grupos"].copy()
     ko_dict = {}
     for _, r in ko.iterrows():
@@ -678,13 +653,10 @@ with tab5:
         ko_dict[pid] = {
             "local": r["Local"], "goles_l": int(r["Goles_L"]),
             "visitante": r["Visitante"], "goles_v": int(r["Goles_V"]),
-            "ind": r["Indicador"], "fase": r["Fase"],
-            "winner": indicador_winner(r["Indicador"], r["Local"], r["Visitante"])
+            "ind": r["Ind"], "fase": r["Fase"],
+            "winner": indicador_winner(r["Ind"], r["Local"], r["Visitante"])
         }
 
-    # ── Estructura del bracket (left side / right side) ──
-    # Lado izquierdo: P73→P90, P74→P89, P75→P90, P77→P89 ...
-    # Definimos los 4 cuadrantes con sus 16vos, 8vo, 4to, semi
     bracket_structure = {
         "left": [
             {"label": "Cuadrante A", "16vos": [74, 77], "8vos": 89, "4tos": 97, "semi": 101},
@@ -708,31 +680,20 @@ with tab5:
         gl, gv = m["goles_l"], m["goles_v"]
         ind = m["ind"]
 
-        # Colores ganador/perdedor (marcador)
         if "Local" in ind or ind == "GanaLocal":
             cl, cv = "#34d399", "#64748b"
         else:
             cl, cv = "#64748b", "#34d399"
 
         penales = "🥅" if "Penales" in ind else ""
-
-        # ── Lógica de color de fondo ──
-        # Si hay equipo seleccionado Y colores activos:
-        #   toda la casilla se colorea según P(equipo llega a esa fase)
-        # Si no hay equipo seleccionado Y colores activos:
-        #   cada fila se colorea según P(ese equipo llega a esa fase)
-        # Si colores desactivados: fondo neutro para ambos
-
         equipo_activo = equipo_sel != "— Todos —"
 
         if use_color and equipo_activo:
             p_card = prob_llegar(df_pri, equipo_sel, fase_label)
             bg_card, tx_card = get_prob_color(p_card, True)
             bg_loc = bg_vis = bg_card
-            # texto del equipo seleccionado resaltado, el otro apagado
             tx_loc = tx_card if loc == equipo_sel else "#94a3b8"
             tx_vis = tx_card if vis == equipo_sel else "#94a3b8"
-            # borde especial si el equipo aparece en esta casilla
             border_color = tx_card if equipo_sel in [loc, vis] else "#334155"
         elif use_color and not equipo_activo:
             p_loc = prob_llegar(df_pri, loc, fase_label)
@@ -758,7 +719,6 @@ with tab5:
             <div style="background:#0f172a;padding:2px 8px;font-size:10px;color:#475569;">P{pid} · {m["fase"]}</div>
         </div>"""
 
-    # ── Leyenda de colores ──
     if mostrar_colores:
         equipo_activo_leg = equipo_sel != "— Todos —"
         leyenda_titulo = (
@@ -780,70 +740,62 @@ with tab5:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Render bracket ──
-    # 16vos (8 por lado) | 8vos (4) | 4tos (2) | semi (1) | FINAL | semi | 4tos | 8vos | 16vos
     col_left, col_center, col_right = st.columns([5, 2, 5])
 
     with col_left:
-        st.markdown("**← Cuadrantes A·B·C·D**", unsafe_allow_html=False)
+        st.markdown("**← Cuadrantes A·B·C·D**", unsafe_allow_False)
         for cuad in bracket_structure["left"]:
             st.markdown(f'<div style="font-size:11px;color:#0f766e;font-weight:700;margin:6px 0 2px 0;">▶ {cuad["label"]}</div>', unsafe_allow_html=True)
             sub_cols = st.columns([3, 3, 3, 3])
-            # 16vos — 2 partidos
             with sub_cols[0]:
                 for pid in cuad["16vos"]:
-                    st.markdown(render_match_card(pid, "16vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
-            # 8vos
+                    st.markdown(render_match_card(pid, "16vos", mostrar_colores), unsafe_allow_html=True)
             with sub_cols[1]:
                 st.markdown("<div style='margin-top:36px'>", unsafe_allow_html=True)
-                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores), unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
-            # 4tos — solo si es el primer cuadrante del par
             with sub_cols[2]:
                 if cuad["label"] in ["Cuadrante A", "Cuadrante C"]:
                     st.markdown("<div style='margin-top:72px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
-            # Semi — solo en cuadrante A
             with sub_cols[3]:
                 if cuad["label"] == "Cuadrante A":
                     st.markdown("<div style='margin-top:144px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
 
     with col_center:
-        # Final + 3er puesto
         st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;color:#fbbf24;font-weight:700;font-size:13px;margin-bottom:6px;">🥇 FINAL</div>', unsafe_allow_html=True)
-        st.markdown(render_match_card(104, "Final", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+        st.markdown(render_match_card(104, "Final", mostrar_colores), unsafe_allow_html=True)
         st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;color:#94a3b8;font-weight:700;font-size:12px;margin-bottom:6px;">🥉 3er Puesto</div>', unsafe_allow_html=True)
-        st.markdown(render_match_card(103, "3ros", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+        st.markdown(render_match_card(103, "3ros", mostrar_colores), unsafe_allow_html=True)
 
     with col_right:
-        st.markdown("**Cuadrantes E·F·G·H →**", unsafe_allow_html=False)
+        st.markdown("**Cuadrantes E·F·G·H →**", unsafe_allow_False)
         for cuad in bracket_structure["right"]:
             st.markdown(f'<div style="font-size:11px;color:#0f766e;font-weight:700;margin:6px 0 2px 0;">◀ {cuad["label"]}</div>', unsafe_allow_html=True)
             sub_cols = st.columns([3, 3, 3, 3])
             with sub_cols[3]:
                 for pid in cuad["16vos"]:
-                    st.markdown(render_match_card(pid, "16vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                    st.markdown(render_match_card(pid, "16vos", mostrar_colores), unsafe_allow_html=True)
             with sub_cols[2]:
                 st.markdown("<div style='margin-top:36px'>", unsafe_allow_html=True)
-                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                st.markdown(render_match_card(cuad["8vos"], "8vos", mostrar_colores), unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
             with sub_cols[1]:
                 if cuad["label"] in ["Cuadrante E", "Cuadrante G"]:
                     st.markdown("<div style='margin-top:72px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["4tos"], "4tos", mostrar_colores), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
             with sub_cols[0]:
                 if cuad["label"] == "Cuadrante E":
                     st.markdown("<div style='margin-top:144px'>", unsafe_allow_html=True)
-                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores, equipo_foco=equipo_sel), unsafe_allow_html=True)
+                    st.markdown(render_match_card(cuad["semi"], "semi", mostrar_colores), unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Grafo de trayectorias del bracket ──
     if mostrar_grafo_b:
         st.divider()
         st.markdown('<div class="section-header">🕸️ Grafo de trayectorias — Fase Final</div>', unsafe_allow_html=True)
@@ -853,7 +805,6 @@ with tab5:
             G_b.add_node(pid, label=f"P{pid}\n{m['winner'][:8]}", fase=m["fase"],
                          winner=m["winner"])
 
-        # Conectar: ganador de X avanza a Y
         avance = {
             73: 90, 74: 89, 75: 90, 76: 93, 77: 89, 78: 93,
             79: 94, 80: 94, 81: 92, 82: 92, 83: 91, 84: 91,
@@ -871,7 +822,6 @@ with tab5:
                          "4tos": "#7c3aed", "semi": "#db2777",
                          "3ros": "#d97706", "Final": "#dc2626"}
 
-        # Highlight equipo seleccionado
         def node_color_b(pid):
             m = ko_dict.get(pid, {})
             if equipo_sel != "— Todos —" and equipo_sel in [m.get("local",""), m.get("visitante",""), m.get("winner","")]:
